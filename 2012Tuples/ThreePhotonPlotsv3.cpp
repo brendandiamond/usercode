@@ -73,12 +73,16 @@ Float_t InvMass(Float_t phiA,Float_t etaA,Float_t photonetA,
 using namespace std;
 void ThreePhotonPlotsv3(void){
 
-// Adding some switches for primary vertex selection vs random vertex selection testing
+// Adding some switches for convenience
    Bool_t          useprimaryvertex = true;
-   Bool_t          outputdata = true;
-   Bool_t          sampleoutput = false;
-   
-   
+   Bool_t          outputdata = true;  // creates a txt file of invariant mass values
+   Bool_t          sampleoutput = false; // just use 50 events for sample
+   float		   wrongvtxwgt = 2;  // 1 - wrong / right vertices
+   float		   rightvtxwgt = 1 + (1-wrongvtxwgt)*15.0/473.0;  // explained below
+// If have X entries. X = 1*wrong + 1*right. To keep x constant,
+// but weight right double we have x = C*right + D*wrong. Therefore C = 1 + (1-D) wrong / right
+ cout << "right weight = " << rightvtxwgt << "  wrong weight = " << wrongvtxwgt << endl;
+ 
   ofstream InvMassdata;
   if (useprimaryvertex == true && outputdata == true) {
      InvMassdata.open ("250InvMassUnbinned_test.txt");
@@ -92,13 +96,14 @@ void ThreePhotonPlotsv3(void){
 //   PhotonIDTree->Add("PhoIDHistsC.root");
 //   PhotonIDTree->Add("PhoIDHistsD.root");
 //    PhotonIDTree->Add("PhoIDHistsMC.root");
-    PhotonIDTree->Add("PhoIDHistsMC250.root");
+    PhotonIDTree->Add("PhoIDHists250_PUtest.root");
 
 
    Int_t           Run;
    Int_t           Event;
    Int_t           LumiSec;
    Int_t           nPho;
+   Int_t           PU_NumInteractions;
    Float_t		   rho;
    Float_t         photonSCeta[ELEMAX];   //[nPho]
    Float_t         photonSCphi[ELEMAX];   //[nPho]
@@ -162,6 +167,7 @@ void ThreePhotonPlotsv3(void){
 
 
    PhotonIDTree->SetBranchAddress("nVert", &nVert);
+   PhotonIDTree->SetBranchAddress("PU_NumInteractions", &PU_NumInteractions);
    PhotonIDTree->SetBranchAddress("vx", vx);
    PhotonIDTree->SetBranchAddress("vy", vy);
    PhotonIDTree->SetBranchAddress("vz", vz);
@@ -173,6 +179,7 @@ void ThreePhotonPlotsv3(void){
     TFile *aa = new TFile("ThreePlotsM250.root","RECREATE");
 
     TH1F *nGammaCan = new TH1F("nGammaCan","Number of photons per candidate event",15,0,15);
+    TH1F *pu = new TH1F("pu","pu",50,0,50);
 
     //Kitchen sink plots
     TH1F *LeadPhotonPT = new TH1F("LeadPhotonPT","Leading Photon p_{T}",250,0,250);
@@ -186,8 +193,9 @@ void ThreePhotonPlotsv3(void){
     TH1F *Eta = new TH1F("Eta","Physics eta",250,-1.5,1.5);
     TH1F *Phi = new TH1F("Phi","Physics Phi",250,-3.2,3.2);
     TH1F *Et = new TH1F("Et","Physics Et",250,0,600);
-    TH1F *PrimaryVertex = new TH1F("PrimaryVertex","Inv. Mass from Primary Vertex",250,230,270);
+    TH1F *PrimaryVertex = new TH1F("PrimaryVertex","Inv. Mass from Primary Vertex",250,230,230);
     TH1F *ShiftedVertex = new TH1F("ShiftedVertex","Inv. Mass from Random Vertex",250,230,270);
+    TH1F *PrimaryVertexWeighted = new TH1F("PrimaryVertexWeighted","Weighted Inv. Mass",250,230,270);
 
     TH1F *Diffvx = new TH1F("Diffvx","vx - gen_vx",250,-10,-10);
     TH1F *Diffvy = new TH1F("Diffvy","vy - gen_vy",250,-10,-10);
@@ -243,12 +251,15 @@ for ( size_t i=0; i<SetName.size(); i++ ){
     cout << "nentries: " << nentries << endl;
     //Loop over Events
     for (int entry=0; entry<nentries; ++entry){
-    
+	
     // loop over cuts, set to false on both arrays
     
       PhotonIDTree->GetEntry(entry);
       if (entry%10000==0) cout << "entry: " << entry << " / " << nentries << endl;
-
+      
+//		cout << "nVert: " << nVert << endl;
+//		cout << "PU_NumInteractions: " << PU_NumInteractions << endl;
+		pu->Fill(PU_NumInteractions);
 
     // logic 1=pass, 0=fail, -1=I don't care
 
@@ -460,10 +471,34 @@ for (int iset=0;iset<NSETS;iset++) {
 	hName["InvMass_" + SetName[iset]]->Fill(MassAB);
 	hName["InvMass_" + SetName[iset]]->Fill(MassAC);
 	hName["InvMass_" + SetName[iset]]->Fill(MassBC);
+	
+	bool vertmatch = true;
+
 	if ( iset==0 ) {
-	PrimaryVertex->Fill(MassAB);
-	PrimaryVertex->Fill(MassAC);
-	PrimaryVertex->Fill(MassBC);
+		Diffvx->Fill(vx[0]-gen_vx[0]);
+		Diffvy->Fill(vy[0]-gen_vy[0]);
+		Diffvz->Fill(vz[0]-gen_vz[0]);
+	
+			for (int it=1; it<nVert;it++) 
+			  { if (fabs(vz[0]-gen_vz[0])>fabs(vz[it]-gen_vz[0])) {
+				  vertmatch = false;
+				  }
+			  }
+			if (vertmatch == true)
+			  {
+			  PrimaryVertexWeighted->Fill(MassAB,rightvtxwgt);
+			  PrimaryVertexWeighted->Fill(MassAC,rightvtxwgt);
+			  PrimaryVertexWeighted->Fill(MassBC,rightvtxwgt);
+			  }
+			else 
+			  {
+			  PrimaryVertexWeighted->Fill(MassAB,wrongvtxwgt);
+			  PrimaryVertexWeighted->Fill(MassAC,wrongvtxwgt);
+			  PrimaryVertexWeighted->Fill(MassBC,wrongvtxwgt);
+			  }	
+	  PrimaryVertex->Fill(MassAB);
+	  PrimaryVertex->Fill(MassAC);
+	  PrimaryVertex->Fill(MassBC);
 	Eta->Fill(etaA);
 	Eta->Fill(etaB);
 	Eta->Fill(etaC);
@@ -484,7 +519,7 @@ for (int iset=0;iset<NSETS;iset++) {
 	Diffvx->Fill(vx[0]-gen_vx[0]);
 	Diffvy->Fill(vy[0]-gen_vy[0]);
 	Diffvz->Fill(vz[0]-gen_vz[0]);
-	bool vertmatch = true;
+	vertmatch = true;
 	
 		for (int it=1; it<nVert;it++) {
 			if (fabs(vz[0]-gen_vz[0])>fabs(vz[it]-gen_vz[0])) {
