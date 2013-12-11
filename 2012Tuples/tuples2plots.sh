@@ -2,8 +2,16 @@
 FILES=INPUTMCTUPLE/*
 for f in $FILES
 do
-  echo "Processing $f file..."
-  # take action on each file. $f store current file name
-  # sed command
-  cat $f
+  filename=$(basename "$f")
+  extension=${filename##*.}
+  filename=${filename%.*}
+  echo "Processing $filename file..."
+  cd ~
+  sed 's:INPUTMCTUPLE:INPUTMCTUPLE/'"$filename"':' <ThreePhotonPlotsv3.cpp >ThreePhotonPlotsv3TEMP.cpp
+  sed 's:OUTPUTPLOTS:OUTPUTPLOTS/'"$filename"'_plots:' <ThreePhotonPlotsv3TEMP.cpp >ThreePhotonPlotsv3TEMP.cpp
+  mkdir -p STDOUT
+  outputfile="STDOUT/"$filename"_stdout.txt"
+  root -l ThreePhotonPlotsv3TEMP.cpp++ > $outputfile
+# testing line below
+#  sed 's:INPUTMCTUPLE:OUTPUTPLOTS/'"$filename"'_plots:' <test.txt >$outputfile
 done
