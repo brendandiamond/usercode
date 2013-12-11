@@ -6,7 +6,6 @@ do
   extension=${filename##*.}
   filename=${filename%.*}
   echo "Processing $filename file..."
-  cd ~
   mkdir -p OUTPUTPLOTS
   mkdir -p STDOUT
   sed 's:INPUTMCTUPLE:INPUTMCTUPLE/'"$filename"':' <ThreePhotonPlotsv3.cpp >ThreePhotonPlotsv3TEMP.cpp
