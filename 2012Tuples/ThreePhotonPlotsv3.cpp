@@ -96,7 +96,7 @@ void ThreePhotonPlotsv3(void){
 //   PhotonIDTree->Add("PhoIDHistsC.root");
 //   PhotonIDTree->Add("PhoIDHistsD.root");
 //    PhotonIDTree->Add("PhoIDHistsMC.root");
-    PhotonIDTree->Add("PhoIDHists250_PUtest.root");
+    PhotonIDTree->Add("INPUTMCTUPLE.root");
 
 
    Int_t           Run;
@@ -176,7 +176,7 @@ void ThreePhotonPlotsv3(void){
    PhotonIDTree->SetBranchAddress("gen_vy", gen_vy);
    PhotonIDTree->SetBranchAddress("gen_vz", gen_vz);
 	
-    TFile *aa = new TFile("ThreePlotsM250.root","RECREATE");
+    TFile *aa = new TFile("OUTPUTPLOTS.root","RECREATE");
 
     TH1F *nGammaCan = new TH1F("nGammaCan","Number of photons per candidate event",15,0,15);
     TH1F *pu = new TH1F("pu","pu",50,0,50);
