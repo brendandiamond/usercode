@@ -11,7 +11,7 @@ do
   sed 's:OUTPUTPLOTS:OUTPUTPLOTS/'"$filename"'_plots:' <ThreePhotonPlotsv3TEMP.cpp >ThreePhotonPlotsv3TEMP.cpp
   mkdir -p STDOUT
   outputfile="STDOUT/"$filename"_stdout.txt"
-  root -l ThreePhotonPlotsv3TEMP.cpp++ > $outputfile
+  root -q -l ThreePhotonPlotsv3TEMP.cpp++ > $outputfile
 # testing line below
 #  sed 's:INPUTMCTUPLE:OUTPUTPLOTS/'"$filename"'_plots:' <test.txt >$outputfile
 done
