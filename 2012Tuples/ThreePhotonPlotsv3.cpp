@@ -23,6 +23,8 @@
 #define NLOOSE 2
 #define NRECO  1
 
+// #define
+
 std::map<TString, TH1F*> hName;           // Map for histograms
 
 void CreateHistogram(const char* name,   const char* title,
@@ -77,17 +79,20 @@ void ThreePhotonPlotsv3(void){
    Bool_t          useprimaryvertex = true;
    Bool_t          outputdata = true;  // creates a txt file of invariant mass values
    Bool_t          sampleoutput = false; // just use 50 events for sample
-   float		   wrongvtxwgt = 2;  // 1 - wrong / right vertices
-   float		   rightvtxwgt = 1 + (1-wrongvtxwgt)*15.0/473.0;  // explained below
+
+// Below I was seeing the effect of doubling the weight of events with the wrong vertex chosen.
+// Currently hard coded with 15 wrong entries / 473 right entries
+//   float		   wrongvtxwgt = 2;  // 1 - wrong / right vertices
+//   float		   rightvtxwgt = 1 + (1-wrongvtxwgt)*15.0/473.0;  // explained below
 // If have X entries. X = 1*wrong + 1*right. To keep x constant,
 // but weight right double we have x = C*right + D*wrong. Therefore C = 1 + (1-D) wrong / right
- cout << "right weight = " << rightvtxwgt << "  wrong weight = " << wrongvtxwgt << endl;
+// cout << "right weight = " << rightvtxwgt << "  wrong weight = " << wrongvtxwgt << endl;
  
   ofstream InvMassdata;
   if (useprimaryvertex == true && outputdata == true) {
-     InvMassdata.open ("250InvMassUnbinned_test.txt");
+     InvMassdata.open ("OUTPUTHIST_InvMassUnbinned.txt");
   } else if (useprimaryvertex == false && outputdata == true){
-       InvMassdata.open ("250InvMassUnbinnedPrim-CalcDiff.txt");
+       InvMassdata.open ("OUTPUTHIST_InvMassUnbinnedPrim-CalcDiff.txt");
   }
 
   TChain *PhotonIDTree = new TChain("PhotonIDTree");
@@ -95,7 +100,7 @@ void ThreePhotonPlotsv3(void){
 //   PhotonIDTree->Add("PhoIDHistsB.root");
 //   PhotonIDTree->Add("PhoIDHistsC.root");
 //   PhotonIDTree->Add("PhoIDHistsD.root");
-//    PhotonIDTree->Add("PhoIDHistsMC.root");
+//    PhotonIDTree->Add("PhoIDHistsMC250.root");
     PhotonIDTree->Add("INPUTMCTUPLE.root");
 
 
@@ -133,7 +138,9 @@ void ThreePhotonPlotsv3(void){
    Double_t         gen_vx[ELEMAX];
    Double_t         gen_vy[ELEMAX];
    Double_t         gen_vz[ELEMAX];
-      
+
+   double 			Weight; // weight from PU reweighting
+   double 			w; // total of all weights
    bool           cuts[ELEMAX][NCUT];
    float 		  RhoCorrPfNeutralHadronIso[ELEMAX];
    float 		  RhoCorrPfChargedHadronIso[ELEMAX];
@@ -165,7 +172,7 @@ void ThreePhotonPlotsv3(void){
    PhotonIDTree->SetBranchAddress("passelectronveto", passelectronveto);
    PhotonIDTree->SetBranchAddress("r9", r9);
 
-
+   PhotonIDTree->SetBranchAddress("Weight", &Weight);
    PhotonIDTree->SetBranchAddress("nVert", &nVert);
    PhotonIDTree->SetBranchAddress("PU_NumInteractions", &PU_NumInteractions);
    PhotonIDTree->SetBranchAddress("vx", vx);
@@ -180,6 +187,7 @@ void ThreePhotonPlotsv3(void){
 
     TH1F *nGammaCan = new TH1F("nGammaCan","Number of photons per candidate event",15,0,15);
     TH1F *pu = new TH1F("pu","pu",50,0,50);
+    TH1F *puUnweighted = new TH1F("puUnweighted","puUnweighted",50,0,50);
 
     //Kitchen sink plots
     TH1F *LeadPhotonPT = new TH1F("LeadPhotonPT","Leading Photon p_{T}",250,0,250);
@@ -193,9 +201,11 @@ void ThreePhotonPlotsv3(void){
     TH1F *Eta = new TH1F("Eta","Physics eta",250,-1.5,1.5);
     TH1F *Phi = new TH1F("Phi","Physics Phi",250,-3.2,3.2);
     TH1F *Et = new TH1F("Et","Physics Et",250,0,600);
+
+
     TH1F *PrimaryVertex = new TH1F("PrimaryVertex","Inv. Mass from Primary Vertex",250,230,230);
     TH1F *ShiftedVertex = new TH1F("ShiftedVertex","Inv. Mass from Random Vertex",250,230,270);
-    TH1F *PrimaryVertexWeighted = new TH1F("PrimaryVertexWeighted","Weighted Inv. Mass",250,230,270);
+//    TH1F *PrimaryVertexWeighted = new TH1F("PrimaryVertexWeighted","Weighted Inv. Mass",250,230,270);
 
     TH1F *Diffvx = new TH1F("Diffvx","vx - gen_vx",250,-10,-10);
     TH1F *Diffvy = new TH1F("Diffvy","vy - gen_vy",250,-10,-10);
@@ -233,6 +243,7 @@ for ( size_t i=0; i<SetName.size(); i++ ){
     CreateHistogram("HphotonphotonIso_" + SetName[i], "photonphotonIso_" + SetName[i] + " (cut at 1.3 + 0.005*pho_Pt)", "","",100,0,10);
     CreateHistogram("HphotonsigmaIetaIeta_" + SetName[i], "HphotonsigmaIetaIeta_" + SetName[i] + " (cut at 0.012)", "","",100,0,0.015);
     CreateHistogram("InvMass_" + SetName[i], "Invariant mass_" + SetName[i], "","",600,0,600);
+    CreateHistogram("InvMass_" + SetName[i]+"unweighted", "Invariant mass_" + SetName[i]+"unweighted", "","",600,0,600);
 	}
 
     vector <Int_t> RUN;
@@ -257,9 +268,12 @@ for ( size_t i=0; i<SetName.size(); i++ ){
       PhotonIDTree->GetEntry(entry);
       if (entry%10000==0) cout << "entry: " << entry << " / " << nentries << endl;
       
+	  w = Weight;
+      
 //		cout << "nVert: " << nVert << endl;
 //		cout << "PU_NumInteractions: " << PU_NumInteractions << endl;
-		pu->Fill(PU_NumInteractions);
+		pu->Fill(PU_NumInteractions,w);
+		puUnweighted->Fill(PU_NumInteractions);
 
     // logic 1=pass, 0=fail, -1=I don't care
 
@@ -328,9 +342,9 @@ for ( size_t i=0; i<SetName.size(); i++ ){
 // 	
 		//end rho correction areas	
 		//Fill rho corrected histograms
-// 		H_RCPfNHIso->Fill(RhoCorrPfNeutralHadronIso);
-// 		H_RCPfCHIso->Fill(RhoCorrPfChargedHadronIso);
-// 		H_RCPfPHIso->Fill(RhoCorrPfPhotonIso);				
+// 		H_RCPfNHIso->Fill(RhoCorrPfNeutralHadronIso,w);
+// 		H_RCPfCHIso->Fill(RhoCorrPfChargedHadronIso,w);
+// 		H_RCPfPHIso->Fill(RhoCorrPfPhotonIso,w);				
 		
 
         cuts[pho][0] = (photonet[pho] > 20.);
@@ -369,9 +383,9 @@ for (int iset=0;iset<NSETS;iset++) {
 		  	RecoEle[nRecoEle] = pho;
 		    nRecoEle++;
 			// fill reco photons
-// 			Hpasselectronveto->Fill(passelectronveto[pho]);
-// 			HphotonhadTowOverEm->Fill(photonhadTowOverEm[pho]);
-// 			HphotonsigmaIetaIeta->Fill(photonsigmaIetaIeta[pho]);
+// 			Hpasselectronveto->Fill(passelectronveto[pho],w);
+// 			HphotonhadTowOverEm->Fill(photonhadTowOverEm[pho],w);
+// 			HphotonsigmaIetaIeta->Fill(photonsigmaIetaIeta[pho],w);
  		  } // etc...
 		} // endif candpass cases
 
@@ -386,8 +400,8 @@ for (int iset=0;iset<NSETS;iset++) {
      if (ncandpass[iset]>2) {
      // good three photon event
 	if (iset==0){ //record Run and Event since we have 3 possible photons (only once per cut set)
-      nGammaCan->Fill(nRecoEle);
-//  	Hrho->Fill(rho);
+      nGammaCan->Fill(nRecoEle,w);
+//  	Hrho->Fill(rho,w);
       RUN.push_back(Run); 
 	  EVENT.push_back(Event);
 //	  cout << "THREE GOOD: event# " << entry << "  nRecoEle " << nRecoEle << "  ncandpass[1] " << ncandpass[1] << "  nloose " << ncandpass[0] << endl;
@@ -445,9 +459,9 @@ for (int iset=0;iset<NSETS;iset++) {
 	// begin plot filling for "candidate" events
     if (iset == 0) {
 		// fill loose photon event info
-		LeadPhotonPT->Fill(threephotonpt[0]);
-		NextPhotonPT->Fill(threephotonpt[1]);
-		TrailPhotonPT->Fill(threephotonpt[2]); 
+		LeadPhotonPT->Fill(threephotonpt[0],w);
+		NextPhotonPT->Fill(threephotonpt[1],w);
+		TrailPhotonPT->Fill(threephotonpt[2],w); 
   	} else if (iset == 2) {
 		// fill -1 EV photons
   	} // etc...
@@ -468,46 +482,58 @@ for (int iset=0;iset<NSETS;iset++) {
 	float_t MassAC = InvMass(phiA,etaA,etA,phiC,etaC,etC);
 	float_t MassBC = InvMass(phiB,etaB,etB,phiC,etaC,etC);
 	  
-	hName["InvMass_" + SetName[iset]]->Fill(MassAB);
-	hName["InvMass_" + SetName[iset]]->Fill(MassAC);
-	hName["InvMass_" + SetName[iset]]->Fill(MassBC);
+	hName["InvMass_" + SetName[iset]]->Fill(MassAB,w);
+	hName["InvMass_" + SetName[iset]]->Fill(MassAC,w);
+	hName["InvMass_" + SetName[iset]]->Fill(MassBC,w);
+
+	hName["InvMass_" + SetName[iset] + "unweighted"]->Fill(MassAB);
+	hName["InvMass_" + SetName[iset] + "unweighted"]->Fill(MassAC);
+	hName["InvMass_" + SetName[iset] + "unweighted"]->Fill(MassBC);
 	
 	bool vertmatch = true;
 
 	if ( iset==0 ) {
-		Diffvx->Fill(vx[0]-gen_vx[0]);
-		Diffvy->Fill(vy[0]-gen_vy[0]);
-		Diffvz->Fill(vz[0]-gen_vz[0]);
+		Diffvx->Fill(vx[0]-gen_vx[0],w);
+		Diffvy->Fill(vy[0]-gen_vy[0],w);
+		Diffvz->Fill(vz[0]-gen_vz[0],w);
 	
-			for (int it=1; it<nVert;it++) 
-			  { if (fabs(vz[0]-gen_vz[0])>fabs(vz[it]-gen_vz[0])) {
-				  vertmatch = false;
-				  }
-			  }
-			if (vertmatch == true)
-			  {
-			  PrimaryVertexWeighted->Fill(MassAB,rightvtxwgt);
-			  PrimaryVertexWeighted->Fill(MassAC,rightvtxwgt);
-			  PrimaryVertexWeighted->Fill(MassBC,rightvtxwgt);
-			  }
-			else 
-			  {
-			  PrimaryVertexWeighted->Fill(MassAB,wrongvtxwgt);
-			  PrimaryVertexWeighted->Fill(MassAC,wrongvtxwgt);
-			  PrimaryVertexWeighted->Fill(MassBC,wrongvtxwgt);
-			  }	
-	  PrimaryVertex->Fill(MassAB);
-	  PrimaryVertex->Fill(MassAC);
-	  PrimaryVertex->Fill(MassBC);
-	Eta->Fill(etaA);
-	Eta->Fill(etaB);
-	Eta->Fill(etaC);
-	Phi->Fill(phiA);
-	Phi->Fill(phiB);
-	Phi->Fill(phiC);
-	Et->Fill(etA);
-	Et->Fill(etB);
-	Et->Fill(etC);	
+// Below was just for seeing effects of doubling weight of wrong vertex selection.
+// 			for (int it=1; it<nVert;it++) 
+// 			  { if (fabs(vz[0]-gen_vz[0])>fabs(vz[it]-gen_vz[0])) {
+// 				  vertmatch = false;
+// 				  }
+// 			  }
+// 			if (vertmatch == true)
+// 			  {
+// 			  PrimaryVertexWeighted->Fill(MassAB,rightvtxwgt);
+// 			  PrimaryVertexWeighted->Fill(MassAC,rightvtxwgt);
+// 			  PrimaryVertexWeighted->Fill(MassBC,rightvtxwgt);
+// 			  }
+// 			else 
+// 			  {
+// 			  PrimaryVertexWeighted->Fill(MassAB,wrongvtxwgt);
+// 			  PrimaryVertexWeighted->Fill(MassAC,wrongvtxwgt);
+// 			  PrimaryVertexWeighted->Fill(MassBC,wrongvtxwgt);
+// 			  }	
+	  PrimaryVertex->Fill(MassAB,w);
+	  PrimaryVertex->Fill(MassAC,w);
+	  PrimaryVertex->Fill(MassBC,w);
+	  
+	if (outputdata == true){
+		  InvMassdata << MassAB << " " << w << "\n";
+		  InvMassdata << MassAC << " " << w << "\n";
+		  InvMassdata << MassBC << " " << w << "\n";		
+	}
+
+	Eta->Fill(etaA,w);
+	Eta->Fill(etaB,w);
+	Eta->Fill(etaC,w);
+	Phi->Fill(phiA,w);
+	Phi->Fill(phiB,w);
+	Phi->Fill(phiC,w);
+	Et->Fill(etA,w);
+	Et->Fill(etB,w);
+	Et->Fill(etC,w);	
 	}  		  
 
 //   	  if ( iset==0 ) {
@@ -516,9 +542,9 @@ for (int iset=0;iset<NSETS;iset++) {
   	if (useprimaryvertex == true) {
 //	if ( iset==0 && r9[threephoton[0]]<0.94 && r9[threephoton[1]]<0.94 && r9[threephoton[2]]<0.94) {
 	if ( iset==0) {
-	Diffvx->Fill(vx[0]-gen_vx[0]);
-	Diffvy->Fill(vy[0]-gen_vy[0]);
-	Diffvz->Fill(vz[0]-gen_vz[0]);
+	Diffvx->Fill(vx[0]-gen_vx[0],w);
+	Diffvy->Fill(vy[0]-gen_vy[0],w);
+	Diffvz->Fill(vz[0]-gen_vz[0],w);
 	vertmatch = true;
 	
 		for (int it=1; it<nVert;it++) {
@@ -572,44 +598,44 @@ for (int iset=0;iset<NSETS;iset++) {
 	  float_t MassACshift = InvMass(phiA,etaA,etA,phiC,etaC,etC);
 	  float_t MassBCshift = InvMass(phiB,etaB,etB,phiC,etaC,etC);
 	  
-	  
-// if (outputdata == true){
-// 	  InvMassdata << MassAB << "\n";
-// 	  InvMassdata << MassAC << "\n";
-// 	  InvMassdata << MassBC << "\n";				  
-// }
-		ShiftedVertex->Fill(MassABshift);
-		ShiftedVertex->Fill(MassACshift);
-		ShiftedVertex->Fill(MassBCshift);
+	  cout << "MassAB   =  " << MassAB << endl;
+if (outputdata == true){
+	  InvMassdata << MassAB << "\n";
+	  InvMassdata << MassAC << "\n";
+	  InvMassdata << MassBC << "\n";				  
+}
+		ShiftedVertex->Fill(MassABshift,w);
+		ShiftedVertex->Fill(MassACshift,w);
+		ShiftedVertex->Fill(MassBCshift,w);
 	
 	
 	
-	calcEta->Fill(etaA);
-	calcEta->Fill(etaB);
-	calcEta->Fill(etaC);
-	calcPhi->Fill(phiA);
-	calcPhi->Fill(phiB);
-	calcPhi->Fill(phiC);
-	calcEt->Fill(etA);
-	calcEt->Fill(etB);
-	calcEt->Fill(etC);
+	calcEta->Fill(etaA,w);
+	calcEta->Fill(etaB,w);
+	calcEta->Fill(etaC,w);
+	calcPhi->Fill(phiA,w);
+	calcPhi->Fill(phiB,w);
+	calcPhi->Fill(phiC,w);
+	calcEt->Fill(etA,w);
+	calcEt->Fill(etB,w);
+	calcEt->Fill(etC,w);
 		
 double diffphiA = photon_physphi[threephoton[0]]-phiA;
 double diffphiB = photon_physphi[threephoton[1]]-phiB;
 double diffphiC = photon_physphi[threephoton[2]]-phiC;
 	
-	DiffEta->Fill(photon_physeta[threephoton[0]]-etaA);
-	DiffEta->Fill(photon_physeta[threephoton[1]]-etaB);
-	DiffEta->Fill(photon_physeta[threephoton[2]]-etaC);
-	DiffPhi->Fill(min(fabs(diffphiA), (2*3.14159 - fabs(diffphiA))));
-	DiffPhi->Fill(min(fabs(diffphiB), (2*3.14159 - fabs(diffphiB))));
-	DiffPhi->Fill(min(fabs(diffphiC), (2*3.14159 - fabs(diffphiC))));
-	DiffEt->Fill(photonet[threephoton[0]]-etA);
-	DiffEt->Fill(photonet[threephoton[1]]-etB);
-	DiffEt->Fill(photonet[threephoton[2]]-etC);
-	DiffEtzoom->Fill(photonet[threephoton[0]]-etA);
-	DiffEtzoom->Fill(photonet[threephoton[1]]-etB);
-	DiffEtzoom->Fill(photonet[threephoton[2]]-etC);
+	DiffEta->Fill(photon_physeta[threephoton[0]]-etaA,w);
+	DiffEta->Fill(photon_physeta[threephoton[1]]-etaB,w);
+	DiffEta->Fill(photon_physeta[threephoton[2]]-etaC,w);
+	DiffPhi->Fill(min(fabs(diffphiA), (2*3.14159 - fabs(diffphiA))),w);
+	DiffPhi->Fill(min(fabs(diffphiB), (2*3.14159 - fabs(diffphiB))),w);
+	DiffPhi->Fill(min(fabs(diffphiC), (2*3.14159 - fabs(diffphiC))),w);
+	DiffEt->Fill(photonet[threephoton[0]]-etA,w);
+	DiffEt->Fill(photonet[threephoton[1]]-etB,w);
+	DiffEt->Fill(photonet[threephoton[2]]-etC,w);
+	DiffEtzoom->Fill(photonet[threephoton[0]]-etA,w);
+	DiffEtzoom->Fill(photonet[threephoton[1]]-etB,w);
+	DiffEtzoom->Fill(photonet[threephoton[2]]-etC,w);
 // 
 
 //	if (((photonet[threephoton[2]]-etC)/photonet[threephoton[2]])<-0.8){
@@ -623,15 +649,15 @@ double diffphiC = photon_physphi[threephoton[2]]-phiC;
 // 	  
 // 		}
 
-	DiffEtaOverPhys->Fill((photon_physeta[threephoton[0]]-etaA)/photon_physeta[threephoton[0]]);
-	DiffEtaOverPhys->Fill((photon_physeta[threephoton[1]]-etaB)/photon_physeta[threephoton[1]]);
-	DiffEtaOverPhys->Fill((photon_physeta[threephoton[2]]-etaC)/photon_physeta[threephoton[2]]);
-	DiffPhiOverPhys->Fill((photon_physphi[threephoton[0]]-phiA)/photon_physphi[threephoton[0]]);
-	DiffPhiOverPhys->Fill((photon_physphi[threephoton[1]]-phiB)/photon_physphi[threephoton[1]]);
-	DiffPhiOverPhys->Fill((photon_physphi[threephoton[2]]-phiC)/photon_physphi[threephoton[2]]);
-	DiffEtOverPhys->Fill((photonet[threephoton[0]]-etA)/photonet[threephoton[0]]);
-	DiffEtOverPhys->Fill((photonet[threephoton[1]]-etB)/photonet[threephoton[1]]);
-	DiffEtOverPhys->Fill((photonet[threephoton[2]]-etC)/photonet[threephoton[2]]);
+	DiffEtaOverPhys->Fill((photon_physeta[threephoton[0]]-etaA)/photon_physeta[threephoton[0]],w);
+	DiffEtaOverPhys->Fill((photon_physeta[threephoton[1]]-etaB)/photon_physeta[threephoton[1]],w);
+	DiffEtaOverPhys->Fill((photon_physeta[threephoton[2]]-etaC)/photon_physeta[threephoton[2]],w);
+	DiffPhiOverPhys->Fill((photon_physphi[threephoton[0]]-phiA)/photon_physphi[threephoton[0]],w);
+	DiffPhiOverPhys->Fill((photon_physphi[threephoton[1]]-phiB)/photon_physphi[threephoton[1]],w);
+	DiffPhiOverPhys->Fill((photon_physphi[threephoton[2]]-phiC)/photon_physphi[threephoton[2]],w);
+	DiffEtOverPhys->Fill((photonet[threephoton[0]]-etA)/photonet[threephoton[0]],w);
+	DiffEtOverPhys->Fill((photonet[threephoton[1]]-etB)/photonet[threephoton[1]],w);
+	DiffEtOverPhys->Fill((photonet[threephoton[2]]-etC)/photonet[threephoton[2]],w);
 	 }
 
 //	  }
@@ -641,12 +667,12 @@ double diffphiC = photon_physphi[threephoton[2]]-phiC;
 //   	  }
   	//  plot filling for "candidate" photons in the event (pt ordered)
 	for (int i=0;i<3;i++) {
- 			hName["Hpasselectronveto_" + SetName[iset]]->Fill(passelectronveto[threephoton[i]]);
- 			hName["HphotonhadTowOverEm_" + SetName[iset]]->Fill(photonhadTowOverEm[threephoton[i]]);
-  			hName["HphotonneutralHadronIso_" + SetName[iset]]->Fill(RhoCorrPfNeutralHadronIso[threephoton[i]]);
- 			hName["HphotonchargedHadronIso_" + SetName[iset]]->Fill(RhoCorrPfChargedHadronIso[threephoton[i]]);
- 			hName["HphotonphotonIso_" + SetName[iset]]->Fill(RhoCorrPfPhotonIso[threephoton[i]]);
-  			hName["HphotonsigmaIetaIeta_" + SetName[iset]]->Fill(photonsigmaIetaIeta[threephoton[i]]);
+ 			hName["Hpasselectronveto_" + SetName[iset]]->Fill(passelectronveto[threephoton[i]],w);
+ 			hName["HphotonhadTowOverEm_" + SetName[iset]]->Fill(photonhadTowOverEm[threephoton[i]],w);
+  			hName["HphotonneutralHadronIso_" + SetName[iset]]->Fill(RhoCorrPfNeutralHadronIso[threephoton[i]],w);
+ 			hName["HphotonchargedHadronIso_" + SetName[iset]]->Fill(RhoCorrPfChargedHadronIso[threephoton[i]],w);
+ 			hName["HphotonphotonIso_" + SetName[iset]]->Fill(RhoCorrPfPhotonIso[threephoton[i]],w);
+  			hName["HphotonsigmaIetaIeta_" + SetName[iset]]->Fill(photonsigmaIetaIeta[threephoton[i]],w);
     } // end loop over 3 candidates
 
    }// endif three passing or two + reco 
