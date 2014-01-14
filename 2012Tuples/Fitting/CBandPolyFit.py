@@ -11,7 +11,8 @@ from ROOT import *
 #------------------------------------------------------------------		
 def main():
 
-	masspoints = [200,250,300,320,340,360,380,400,420]
+#	masspoints = [200,250,300,320,340,360,380,400,420]
+	masspoints = [360,380]
 
 	for masspoint in masspoints:
 		# Suppress all messages except those that matter
@@ -25,6 +26,13 @@ def main():
 		# define fit range
 		massmin=masspoint - masspoint/30.0
 		massmax=masspoint + masspoint/30.0
+		if masspoint == 360:
+			massmin=masspoint - 15
+			massmax=masspoint + 15
+		if masspoint == 380:
+			massmin=masspoint - 40
+			massmax=masspoint + 40
+		
 		massrange = massmax-massmin
 
 		#define ridiculously large weight range
